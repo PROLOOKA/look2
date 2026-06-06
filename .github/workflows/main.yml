@@ -27,10 +27,10 @@ jobs:
           bash restream.sh &
           
           while true; do
-            sleep 5
+            sleep 30
             git config user.name "StreamBot"
             git config user.email "bot@github.com"
             git add hls/
             git commit -m "بث مباشر $(date +%H:%M:%S)" || true
             git push origin main || true
-          done
+          done 
