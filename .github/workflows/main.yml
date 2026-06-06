@@ -1,49 +1,38 @@
-name: 24/7 Live Stream
-
+name: Infinite Restream
 on:
-  workflow_dispatch:
+  workflow_dispatch: # تشغيل يدوي
   schedule:
-    - cron: '0 */5 * * *'
+    - cron: '0 */6 * * *' # تشغيل تلقائي كل 6 ساعات كاحتياط
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   stream:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
-    
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
-      - name: تثبيت FFmpeg
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: إعداد Git
-        run: |
-          git config user.name "StreamBot"
-          git config user.email "bot@github.com"
-
-      - name: تشغيل البث والرفع التلقائي
+      - name: Start Stream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           chmod +x restream.sh
+          ./restream.sh &
           
-          # تشغيل البث في الخلفية
-          bash restream.sh &
-          
-          # رفع الملفات كل 30 ثانية
-          while true; do
-            sleep 30
-            
-            # إضافة جميع ملفات HLS
-            git add hls/*.ts hls/*.m3u8 2>/dev/null
-            
-            # commit و push إذا وجدت تغييرات
-            if ! git diff --cached --quiet; then
-              git commit -m "تحديث البث المستمر $(date '+%Y-%m-%d %H:%M:%S')"
-              git push origin main
-              echo "✅ تم رفع الملفات - $(date)"
-            fi
+          # تحديث الملفات على GitHub كل دقيقتين لمدة 5 ساعات ونصف
+          for i in {1..165}; do
+            sleep 120
+            git config --global user.name "StreamBot"
+            git config --global user.email "bot@github.com"
+            git add hls/
+            git commit -m "Live Update" || continue
+            git push origin main
           done
+
+          # إعادة تشغيل الأكشن لنفسه قبل انتهاء وقت الـ 6 ساعات
+          gh workflow run "Infinite Restream"
