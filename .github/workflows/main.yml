@@ -24,13 +24,13 @@ jobs:
       - name: تشغيل البث
         run: |
           chmod +x restream.sh
-          ./restream.sh &
+          bash restream.sh &
           
           while true; do
-            sleep 10
+            sleep 5
             git config user.name "StreamBot"
             git config user.email "bot@github.com"
             git add hls/
-            git commit -m "Live $(date +%H:%M:%S)" || true
+            git commit -m "بث مباشر $(date +%H:%M:%S)" || true
             git push origin main || true
           done
