@@ -1,49 +1,35 @@
-name: 24/7 Live Stream
+#!/bin/bash
 
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 */5 * * *'
+# إعداد المجلدات
+mkdir -p hls
+rm -rf hls/*
 
-permissions:
-  contents: write
+# الروابط الخاصة بك (ضع روابطك هنا)
+SOURCE_URL="http://vlue.vip/live/778047230676/806944331192/789897.m3u8"
+LOGO_URL="https://up6.cc/2026/06/178065057949411.png"
 
-jobs:
-  stream:
-    runs-on: ubuntu-latest
-    timeout-minutes: 350
-    
-    steps:
-      - uses: actions/checkout@v4
+# تحميل الشعار
+wget -O logo.png "$LOGO_URL"
 
-      - name: تثبيت FFmpeg
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-
-      - name: إعداد Git
-        run: |
-          git config user.name "StreamBot"
-          git config user.email "bot@github.com"
-
-      - name: تشغيل البث والرفع التلقائي
-        run: |
-          chmod +x restream.sh
-          
-          # تشغيل البث في الخلفية
-          bash restream.sh &
-          
-          # رفع الملفات كل 30 ثانية
-          while true; do
-            sleep 30
-            
-            # إضافة جميع ملفات HLS
-            git add hls/*.ts hls/*.m3u8 2>/dev/null
-            
-            # commit و push إذا وجدت تغييرات
-            if ! git diff --cached --quiet; then
-              git commit -m "تحديث البث المستمر $(date '+%Y-%m-%d %H:%M:%S')"
-              git push origin main
-              echo "✅ تم رفع الملفات - $(date)"
-            fi
-          done
+# تشغيل ffmpeg بجودات متعددة
+ffmpeg -re -i "$SOURCE_URL" -i logo.png \
+-filter_complex \
+"[1:v]scale=100:-1[logo]; \
+ [0:v][logo]overlay=10:main_h-overlay_h-10[v_logo]; \
+ [v_logo]split=3[v1][v2][v3]; \
+ [v1]scale=1280:720[v1out]; \
+ [v2]scale=854:480[v2out]; \
+ [v3]scale=640:360[v3out]" \
+-map "[v1out]" -c:v:0 libx264 -b:v:0 2500k -preset superfast -g 50 \
+-map "[v2out]" -c:v:1 libx264 -b:v:1 1000k -preset superfast -g 50 \
+-map "[v3out]" -c:v:2 libx264 -b:v:2 600k -preset superfast -g 50 \
+-map 0:a -c:a:0 aac -b:a:0 128k \
+-map 0:a -c:a:1 aac -b:a:1 128k \
+-map 0:a -c:a:2 aac -b:a:2 64k \
+-f hls \
+-hls_time 6 \
+-hls_list_size 5 \
+-hls_flags delete_segments \
+-master_pl_name master.m3u8 \
+-var_stream_map "v:0,a:0 v:1,a:1 v:2,a:2" \
+hls/v%v.m3u8
