@@ -6,3 +6,8 @@
 segment_000.ts
 #EXTINF:2.000000,
 segment_001.ts
+#EXT-X-DISCONTINUITY
+#EXTINF:2.000000,
+segment_000002.ts
+#EXTINF:2.400000,
+segment_000003.ts
