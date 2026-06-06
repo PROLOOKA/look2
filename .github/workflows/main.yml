@@ -15,40 +15,35 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: تثبيت FFmpeg و inotify-tools
+      - name: تثبيت FFmpeg
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg inotify-tools
+          sudo apt-get install -y ffmpeg
 
       - name: إعداد Git
         run: |
           git config user.name "StreamBot"
           git config user.email "bot@github.com"
 
-      - name: تشغيل البث مع رفع مباشر
+      - name: تشغيل البث والرفع التلقائي
         run: |
           chmod +x restream.sh
           
-          # دالة لرفع الملفات فوراً
-          upload_files() {
-            while true; do
-              sleep 2
-              git add hls/*.ts hls/*.m3u8 2>/dev/null
-              git diff --cached --quiet || {
-                git commit -m "بث مباشر $(date +%Y-%m-%d_%H:%M:%S)"
-                git push origin main
-              }
-            done
-          }
+          # تشغيل البث في الخلفية
+          bash restream.sh &
           
-          # تشغيل الرفع المتوازي
-          upload_files &
-          UPLOAD_PID=$!
-          
-          # تشغيل البث
-          bash restream.sh
-          
-          kill $UPLOAD_PID 2>/dev/null
+          # رفع الملفات كل 30 ثانية
+          while true; do
+            sleep 30
+            
+            # إضافة جميع ملفات HLS
+            git add hls/*.ts hls/*.m3u8 2>/dev/null
+            
+            # commit و push إذا وجدت تغييرات
+            if ! git diff --cached --quiet; then
+              git commit -m "تحديث البث المستمر $(date '+%Y-%m-%d %H:%M:%S')"
+              git push origin main
+              echo "✅ تم رفع الملفات - $(date)"
+            fi
+          done
