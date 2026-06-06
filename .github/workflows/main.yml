@@ -1,8 +1,8 @@
 name: Infinite Restream
 on:
-  workflow_dispatch: # تشغيل يدوي
+  workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *' # تشغيل تلقائي كل 6 ساعات كاحتياط
+    - cron: '0 */6 * * *'
 
 permissions:
   contents: write
@@ -14,25 +14,33 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install FFmpeg and inotify
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg inotify-tools
 
-      - name: Start Stream
+      - name: Start Stream + Instant Upload
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           chmod +x restream.sh
           ./restream.sh &
           
-          # تحديث الملفات على GitHub كل دقيقتين لمدة 5 ساعات ونصف
-          for i in {1..165}; do
-            sleep 120
-            git config --global user.name "StreamBot"
-            git config --global user.email "bot@github.com"
-            git add hls/
-            git commit -m "Live Update" || continue
-            git push origin main
-          done
-
-          # إعادة تشغيل الأكشن لنفسه قبل انتهاء وقت الـ 6 ساعات
+          # وظيفة رفع فورية لأي ملف جديد في مجلد hls
+          upload_new_files() {
+            inotifywait -m hls/ -e create -e modify --format '%f' | while read file
+            do
+              echo "New file detected: $file"
+              git config --global user.name "StreamBot"
+              git config --global user.email "bot@github.com"
+              git add "hls/$file"
+              git commit -m "Live segment: $file" || continue
+              git push origin main
+            done
+          }
+          
+          upload_new_files &
+          
+          # متابعة لمدة 5 ساعات ونصف ثم إعادة تشغيل الأكشن
+          sleep 19800
           gh workflow run "Infinite Restream"
