@@ -1,29 +1,49 @@
-#!/bin/bash
+name: 24/7 Live Stream
 
-mkdir -p hls
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */5 * * *'
 
-SOURCE_URL="http://vlue.vip/live/778047230676/806944331192/789897.m3u8"
-LOGO_URL="https://up6.cc/2026/06/178065057949411.png"
+permissions:
+  contents: write
 
-wget -O logo.png "$LOGO_URL"
-
-while true; do
-    echo "بدء البث..."
-    ffmpeg -re \
-           -user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
-           -i "$SOURCE_URL" \
-           -i logo.png \
-           -filter_complex \
-           "[1:v]scale=100:-1[logo];[0:v][logo]overlay=10:main_h-overlay_h-10[vout]" \
-           -map "[vout]" -c:v libx264 -b:v 2000k -preset superfast -g 50 \
-           -map 0:a -c:a aac -b:a 128k \
-           -f hls \
-           -hls_time 4 \
-           -hls_list_size 0 \
-           -hls_flags append_list+omit_endlist+discont_start \
-           -hls_segment_filename "hls/segment_%06d.ts" \
-           hls/master.m3u8
+jobs:
+  stream:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
     
-    echo "إعادة تشغيل البث..."
-    sleep 2
-done
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: تثبيت FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: إعداد Git
+        run: |
+          git config user.name "StreamBot"
+          git config user.email "bot@github.com"
+
+      - name: تشغيل البث والرفع التلقائي
+        run: |
+          chmod +x restream.sh
+          
+          # تشغيل البث في الخلفية
+          bash restream.sh &
+          
+          # رفع الملفات كل 30 ثانية
+          while true; do
+            sleep 30
+            
+            # إضافة جميع ملفات HLS
+            git add hls/*.ts hls/*.m3u8 2>/dev/null
+            
+            # commit و push إذا وجدت تغييرات
+            if ! git diff --cached --quiet; then
+              git commit -m "تحديث البث المستمر $(date '+%Y-%m-%d %H:%M:%S')"
+              git push origin main
+              echo "✅ تم رفع الملفات - $(date)"
+            fi
+          done
