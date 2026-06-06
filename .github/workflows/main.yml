@@ -15,22 +15,40 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: تثبيت FFmpeg
+      - name: تثبيت FFmpeg و inotify-tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg inotify-tools
 
-      - name: تشغيل البث
+      - name: إعداد Git
+        run: |
+          git config user.name "StreamBot"
+          git config user.email "bot@github.com"
+
+      - name: تشغيل البث مع رفع مباشر
         run: |
           chmod +x restream.sh
-          bash restream.sh &
           
-          while true; do
-            sleep 30
-            git config user.name "StreamBot"
-            git config user.email "bot@github.com"
-            git add hls/
-            git commit -m "بث مباشر $(date +%H:%M:%S)" || true
-            git push origin main || true
-          done 
+          # دالة لرفع الملفات فوراً
+          upload_files() {
+            while true; do
+              sleep 2
+              git add hls/*.ts hls/*.m3u8 2>/dev/null
+              git diff --cached --quiet || {
+                git commit -m "بث مباشر $(date +%Y-%m-%d_%H:%M:%S)"
+                git push origin main
+              }
+            done
+          }
+          
+          # تشغيل الرفع المتوازي
+          upload_files &
+          UPLOAD_PID=$!
+          
+          # تشغيل البث
+          bash restream.sh
+          
+          kill $UPLOAD_PID 2>/dev/null
